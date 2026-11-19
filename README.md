@@ -1,3 +1,3 @@
 # JontroLagbe Server
 
-Express server for the GearHive equipment rental platform.
+Express server for the JontroLagbe equipment rental platform.
