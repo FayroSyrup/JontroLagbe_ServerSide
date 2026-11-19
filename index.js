@@ -237,6 +237,61 @@ app.get('/equipment/mine', verifyToken, verifyOwner, async (req, res) => {
     res.send(result);
 })
 
+// stops special characters from breaking the regex search
+const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const getPaging = (req, defaultLimit = 10) => {
+    const page = Math.max(parseInt(req.query.page) || 1, 1);
+    const limit = Math.min(Math.max(parseInt(req.query.limit) || defaultLimit, 1), 50);
+    return { page, limit, skip: (page - 1) * limit };
+}
+
+const sendPaged = async (res, collection, query, sort, { page, limit, skip }) => {
+    const total = await collection.countDocuments(query);
+    const data = await collection.find(query).sort(sort).skip(skip).limit(limit).toArray();
+    res.send({ data, total, page, totalPages: Math.ceil(total / limit) });
+}
+
+const SORT_OPTIONS = {
+    'price-asc': { rentalPrice: 1, _id: 1 },
+    'price-desc': { rentalPrice: -1, _id: 1 },
+    newest: { createdAt: -1, _id: -1 },
+}
+
+// public list, only approved equipment. home page uses ?limit=6
+app.get('/equipment', async (req, res) => {
+    const { search, category, rentalType, minPrice, maxPrice, availability, sort } = req.query;
+    const query = { status: 'approved' };
+
+    if (search) {
+        const safe = escapeRegex(search.trim());
+        query.$or = [
+            { name: { $regex: safe, $options: 'i' } },
+            { location: { $regex: safe, $options: 'i' } },
+            { category: { $regex: safe, $options: 'i' } },
+        ];
+    }
+    if (category) {
+        query.category = category;
+    }
+    if (rentalType) {
+        query.rentalType = rentalType;
+    }
+    if (minPrice || maxPrice) {
+        query.rentalPrice = {};
+        if (minPrice) query.rentalPrice.$gte = Number(minPrice);
+        if (maxPrice) query.rentalPrice.$lte = Number(maxPrice);
+    }
+    if (availability === 'available') {
+        query.availableQuantity = { $gt: 0 };
+    }
+    if (availability === 'unavailable') {
+        query.availableQuantity = { $lte: 0 };
+    }
+
+    await sendPaged(res, equipment, query, SORT_OPTIONS[sort] || SORT_OPTIONS.newest, getPaging(req, 9));
+})
+
 app.listen(port, () => {
     console.log(`JontroLagbe is running on port ${port}`)
 })
