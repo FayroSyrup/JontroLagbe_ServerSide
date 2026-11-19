@@ -165,6 +165,78 @@ app.patch('/users/:id/status', verifyToken, verifyAdmin, async (req, res) => {
     res.send(result);
 })
 
+// equipment related apis
+const CATEGORIES = [
+    'Construction Equipment',
+    'Photography Equipment',
+    'Vehicles & Transportation',
+    'Agriculture Equipment',
+    'Electronics',
+    'Event Equipment',
+];
+const RENTAL_TYPES = ['Daily', 'Weekly', 'Monthly'];
+const CONDITIONS = ['New', 'Excellent', 'Good', 'Fair'];
+
+const str = (value) => String(value || '').trim();
+
+// only pick the fields we allow, ignore everything else
+const getEquipmentData = (body) => ({
+    name: str(body.name),
+    description: str(body.description),
+    category: body.category,
+    location: str(body.location),
+    rentalPrice: Number(body.rentalPrice),
+    rentalType: body.rentalType,
+    availableQuantity: Number(body.availableQuantity),
+    condition: body.condition,
+    brand: str(body.brand),
+    model: str(body.model),
+    image: str(body.image),
+    terms: str(body.terms),
+})
+
+const validateEquipment = (data) => {
+    if (!data.name) return 'Equipment name is required';
+    if (!data.description) return 'Description is required';
+    if (!CATEGORIES.includes(data.category)) return 'Invalid category';
+    if (!data.location) return 'Location is required';
+    if (!(data.rentalPrice > 0)) return 'Rental price must be more than 0';
+    if (!RENTAL_TYPES.includes(data.rentalType)) return 'Invalid rental type';
+    if (!Number.isInteger(data.availableQuantity) || data.availableQuantity < 0) return 'Invalid quantity';
+    if (!CONDITIONS.includes(data.condition)) return 'Invalid condition';
+    if (!data.brand || !data.model) return 'Brand and model are required';
+    if (!data.image) return 'Equipment image is required';
+    if (!data.terms) return 'Rental terms are required';
+    return null;
+}
+
+app.post('/equipment', verifyToken, verifyOwner, async (req, res) => {
+    const data = getEquipmentData(req.body);
+    const error = validateEquipment(data);
+    if (error) {
+        return res.status(400).send({ message: error });
+    }
+    const item = {
+        ...data,
+        status: 'pending',
+        ownerId: req.user._id.toString(),
+        ownerName: req.user.name,
+        ownerEmail: req.user.email,
+        ownerImage: req.user.image || '',
+        ownerPhone: req.user.phone || '',
+        createdAt: new Date(),
+    }
+    const result = await equipment.insertOne(item);
+    res.send(result);
+})
+
+// owner's own equipment, keep this above /equipment/:id
+app.get('/equipment/mine', verifyToken, verifyOwner, async (req, res) => {
+    const query = { ownerId: req.user._id.toString() };
+    const result = await equipment.find(query).sort({ createdAt: -1 }).toArray();
+    res.send(result);
+})
+
 app.listen(port, () => {
     console.log(`JontroLagbe is running on port ${port}`)
 })
