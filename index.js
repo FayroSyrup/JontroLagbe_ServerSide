@@ -631,6 +631,74 @@ app.post('/payments/checkout-verify', verifyToken, verifyRenter, async (req, res
     res.send({ success: true, updateResult });
 })
 
+// analytics related apis
+const getLastMonths = (count) => {
+    const months = [];
+    const now = new Date();
+    for (let i = count - 1; i >= 0; i--) {
+        const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+        months.push(date.toISOString().slice(0, 7));
+    }
+    return months;
+}
+
+// month wise count and money from the payments collection, empty months become 0
+const getMonthlyPayments = async (match, count = 6) => {
+    const months = getLastMonths(count);
+    const rows = await payments.aggregate([
+        { $match: { ...match, paidAt: { $gte: new Date(`${months[0]}-01T00:00:00Z`) } } },
+        {
+            $group: {
+                _id: { $dateToString: { format: '%Y-%m', date: '$paidAt' } },
+                bookings: { $sum: 1 },
+                revenue: { $sum: '$amount' },
+            }
+        },
+    ]).toArray();
+    return months.map((month) => {
+        const row = rows.find((item) => item._id === month);
+        return { month, bookings: row?.bookings || 0, revenue: row?.revenue || 0 };
+    });
+}
+
+app.get('/analytics/admin', verifyToken, verifyAdmin, async (req, res) => {
+    const [
+        totalUsers,
+        totalEquipment,
+        totalBookings,
+        pendingApprovals,
+        completedRentals,
+        revenueResult,
+        monthlyBookings,
+        equipmentByCategory,
+    ] = await Promise.all([
+        users.countDocuments({}),
+        equipment.countDocuments({}),
+        // unpaid ones are only drafts, so only paid bookings are counted
+        bookings.countDocuments({ paymentStatus: 'paid' }),
+        equipment.countDocuments({ status: 'pending' }),
+        bookings.countDocuments({ bookingStatus: 'completed' }),
+        payments.aggregate([{ $group: { _id: null, total: { $sum: '$amount' } } }]).toArray(),
+        getMonthlyPayments({}),
+        equipment.aggregate([
+            { $match: { status: 'approved' } },
+            { $group: { _id: '$category', count: { $sum: 1 } } },
+            { $sort: { count: -1 } },
+        ]).toArray(),
+    ]);
+
+    res.send({
+        totalUsers,
+        totalEquipment,
+        totalBookings,
+        pendingApprovals,
+        completedRentals,
+        totalRevenue: revenueResult[0]?.total || 0,
+        monthlyBookings,
+        equipmentByCategory: equipmentByCategory.map((row) => ({ category: row._id, count: row.count })),
+    });
+})
+
 app.listen(port, () => {
     console.log(`JontroLagbe is running on port ${port}`)
 })
