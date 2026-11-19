@@ -3,6 +3,7 @@ import cors from 'cors';
 import 'dotenv/config';
 import { MongoClient, ObjectId } from 'mongodb';
 import Stripe from 'stripe';
+import nodemailer from 'nodemailer';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const app = express();
@@ -721,6 +722,47 @@ app.get('/analytics/owner', verifyToken, verifyOwner, async (req, res) => {
         monthlyEarnings: monthly.map((row) => ({ month: row.month, rentals: row.bookings, earnings: row.revenue })),
     });
 })
+
+// email related helpers
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+});
+
+const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (char) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]
+));
+
+// email problems should never break the main work
+const sendMail = async (to, subject, html) => {
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+        return;
+    }
+    try {
+        await transporter.sendMail({ from: `"GearHive" <${process.env.EMAIL_USER}>`, to, subject, html });
+    } catch (err) {
+        console.log('email failed', err.message);
+    }
+}
+
+const sendBookingCompletedEmails = async (booking) => {
+    const name = escapeHtml(booking.equipmentName);
+    const dates = `${booking.startDate} to ${booking.endDate}`;
+
+    await sendMail(
+        booking.customerEmail,
+        'Your rental is completed',
+        `<p>Hi ${escapeHtml(booking.customerName)},</p>
+         <p>Your rental of <b>${name}</b> (${dates}) is now completed. Thank you for using GearHive.</p>`
+    );
+    await sendMail(
+        booking.ownerEmail,
+        'A rental of your equipment is completed',
+        `<p>Hi ${escapeHtml(booking.ownerName)},</p>
+         <p>The rental of <b>${name}</b> by ${escapeHtml(booking.customerName)} (${dates}) is completed.
+         Amount: $${booking.totalAmount}.</p>`
+    );
+}
 
 app.listen(port, () => {
     console.log(`JontroLagbe is running on port ${port}`)
