@@ -2,7 +2,9 @@ import express from 'express';
 import cors from 'cors';
 import 'dotenv/config';
 import { MongoClient, ObjectId } from 'mongodb';
+import Stripe from 'stripe';
 
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const app = express();
 const port = process.env.PORT || 5000;
 
@@ -561,6 +563,72 @@ app.get('/bookings/:id', verifyToken, async (req, res) => {
         return res.status(404).send({ message: 'Booking not found' });
     }
     res.send(booking);
+})
+
+// payments related apis
+app.post('/payments/checkout-verify', verifyToken, verifyRenter, async (req, res) => {
+    const { sessionId } = req.body;
+    if (!sessionId) {
+        return res.send({ success: false, message: 'Session ID is required' });
+    }
+
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+    // the session must belong to the logged in user
+    if (session.metadata?.userId !== req.user._id.toString()) {
+        return res.status(403).send({ message: 'Forbidden' });
+    }
+    if (session.status !== 'complete' || session.payment_status !== 'paid') {
+        return res.send({ success: false, message: 'Payment verification failed' });
+    }
+
+    // page reload should not break anything
+    const existingPayment = await payments.findOne({ sessionId });
+    if (existingPayment) {
+        return res.send({ success: true, alreadyVerified: true });
+    }
+
+    const bookingId = toObjectId(session.metadata.bookingId);
+    const booking = await bookings.findOne({ _id: bookingId, customerId: req.user._id.toString() });
+    if (!booking) {
+        return res.status(404).send({ message: 'Booking not found' });
+    }
+
+    const payment = {
+        sessionId,
+        bookingId: booking._id.toString(),
+        equipmentId: booking.equipmentId,
+        equipmentName: booking.equipmentName,
+        customerId: booking.customerId,
+        ownerId: booking.ownerId,
+        customerEmail: session.customer_email,
+        amount: (session.amount_total || 0) / 100,
+        currency: session.currency,
+        paymentIntent: session.payment_intent,
+        status: session.payment_status,
+        paidAt: new Date(),
+    }
+
+    try {
+        await payments.insertOne(payment);
+    } catch (err) {
+        // unique index caught a double request
+        if (err.code === 11000) {
+            return res.send({ success: true, alreadyVerified: true });
+        }
+        throw err;
+    }
+
+    const updatedDoc = {
+        $set: {
+            paymentStatus: 'paid',
+            bookingStatus: 'confirmed',
+            transactionId: session.payment_intent,
+            paidAt: payment.paidAt,
+        }
+    }
+    const updateResult = await bookings.updateOne({ _id: bookingId }, updatedDoc);
+    res.send({ success: true, updateResult });
 })
 
 app.listen(port, () => {
