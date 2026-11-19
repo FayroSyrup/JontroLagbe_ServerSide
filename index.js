@@ -362,6 +362,27 @@ app.delete('/equipment/:id', verifyToken, verifyOwnerOrAdmin, async (req, res) =
     res.send(result);
 })
 
+const EQUIPMENT_STATUSES = ['pending', 'approved', 'rejected'];
+
+app.get('/admin/equipment', verifyToken, verifyAdmin, async (req, res) => {
+    const query = {};
+    if (req.query.status) {
+        query.status = req.query.status;
+    }
+    const result = await equipment.find(query).sort({ createdAt: -1 }).toArray();
+    res.send(result);
+})
+
+app.patch('/equipment/:id/status', verifyToken, verifyAdmin, async (req, res) => {
+    const id = toObjectId(req.params.id);
+    const { status } = req.body;
+    if (!id || !EQUIPMENT_STATUSES.includes(status)) {
+        return res.status(400).send({ message: 'Invalid request' });
+    }
+    const result = await equipment.updateOne({ _id: id }, { $set: { status } });
+    res.send(result);
+})
+
 app.listen(port, () => {
     console.log(`JontroLagbe is running on port ${port}`)
 })
