@@ -809,6 +809,15 @@ app.get('/cron/update-bookings', async (req, res) => {
     res.send(result);
 })
 
+app.use((req, res) => {
+    res.status(404).send({ message: 'Route not found' });
+})
+
+app.use((err, req, res, next) => {
+    console.log(err.message);
+    res.status(500).send({ message: 'Something went wrong' });
+})
+
 app.listen(port, () => {
     console.log(`JontroLagbe is running on port ${port}`)
 })
