@@ -292,6 +292,76 @@ app.get('/equipment', async (req, res) => {
     await sendPaged(res, equipment, query, SORT_OPTIONS[sort] || SORT_OPTIONS.newest, getPaging(req, 9));
 })
 
+app.get('/equipment/:id', verifyToken, async (req, res) => {
+    const id = toObjectId(req.params.id);
+    if (!id) {
+        return res.status(400).send({ message: 'Invalid equipment id' });
+    }
+    const item = await equipment.findOne({ _id: id });
+    const isOwner = item?.ownerId === req.user._id.toString();
+    // pending and rejected items are only visible to the owner and admin
+    if (!item || (item.status !== 'approved' && !isOwner && req.user.role !== 'admin')) {
+        return res.status(404).send({ message: 'Equipment not found' });
+    }
+    res.send(item);
+})
+
+app.put('/equipment/:id', verifyToken, verifyOwnerOrAdmin, async (req, res) => {
+    const id = toObjectId(req.params.id);
+    if (!id) {
+        return res.status(400).send({ message: 'Invalid equipment id' });
+    }
+    const item = await equipment.findOne({ _id: id });
+    if (!item) {
+        return res.status(404).send({ message: 'Equipment not found' });
+    }
+    if (req.user.role === 'owner' && item.ownerId !== req.user._id.toString()) {
+        return res.status(403).send({ message: 'Forbidden' });
+    }
+
+    const data = getEquipmentData(req.body);
+    const error = validateEquipment(data);
+    if (error) {
+        return res.status(400).send({ message: error });
+    }
+
+    const updatedDoc = { $set: { ...data, updatedAt: new Date() } };
+    // owner edits need admin approval again
+    if (req.user.role === 'owner') {
+        updatedDoc.$set.status = 'pending';
+    }
+    const result = await equipment.updateOne({ _id: id }, updatedDoc);
+    res.send(result);
+})
+
+app.delete('/equipment/:id', verifyToken, verifyOwnerOrAdmin, async (req, res) => {
+    const id = toObjectId(req.params.id);
+    if (!id) {
+        return res.status(400).send({ message: 'Invalid equipment id' });
+    }
+    const item = await equipment.findOne({ _id: id });
+    if (!item) {
+        return res.status(404).send({ message: 'Equipment not found' });
+    }
+    if (req.user.role === 'owner' && item.ownerId !== req.user._id.toString()) {
+        return res.status(403).send({ message: 'Forbidden' });
+    }
+
+    // do not delete if customers have paid and not returned yet
+    const activeBookings = await bookings.countDocuments({
+        equipmentId: req.params.id,
+        paymentStatus: 'paid',
+        bookingStatus: 'confirmed',
+    });
+    if (activeBookings > 0) {
+        return res.status(409).send({ message: 'This equipment has active rentals' });
+    }
+
+    const result = await equipment.deleteOne({ _id: id });
+    await favorites.deleteMany({ equipmentId: id });
+    res.send(result);
+})
+
 app.listen(port, () => {
     console.log(`JontroLagbe is running on port ${port}`)
 })
