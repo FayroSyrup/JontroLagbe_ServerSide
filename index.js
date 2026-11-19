@@ -531,6 +531,38 @@ app.post('/bookings', verifyToken, verifyRenter, async (req, res) => {
     res.send({ insertedId: result.insertedId, totalAmount: booking.totalAmount });
 })
 
+// customer booking history (paginated)
+app.get('/bookings/mine', verifyToken, verifyRenter, async (req, res) => {
+    const query = { customerId: req.user._id.toString() };
+    await sendPaged(res, bookings, query, { createdAt: -1 }, getPaging(req, 10));
+})
+
+// rentals of the owner's equipment
+app.get('/bookings/owner', verifyToken, verifyOwner, async (req, res) => {
+    const query = { ownerId: req.user._id.toString(), paymentStatus: 'paid' };
+    await sendPaged(res, bookings, query, { createdAt: -1 }, getPaging(req, 10));
+})
+
+// all rentals for admin
+app.get('/bookings', verifyToken, verifyAdmin, async (req, res) => {
+    await sendPaged(res, bookings, {}, { createdAt: -1 }, getPaging(req, 10));
+})
+
+// one booking, used by the payment step
+app.get('/bookings/:id', verifyToken, async (req, res) => {
+    const id = toObjectId(req.params.id);
+    if (!id) {
+        return res.status(400).send({ message: 'Invalid booking id' });
+    }
+    const booking = await bookings.findOne({ _id: id });
+    const userId = req.user._id.toString();
+    const allowed = booking && (booking.customerId === userId || booking.ownerId === userId || req.user.role === 'admin');
+    if (!allowed) {
+        return res.status(404).send({ message: 'Booking not found' });
+    }
+    res.send(booking);
+})
+
 app.listen(port, () => {
     console.log(`JontroLagbe is running on port ${port}`)
 })
