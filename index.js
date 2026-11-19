@@ -4,6 +4,7 @@ import 'dotenv/config';
 import { MongoClient, ObjectId } from 'mongodb';
 import Stripe from 'stripe';
 import nodemailer from 'nodemailer';
+import cron from 'node-cron';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const app = express();
@@ -763,6 +764,50 @@ const sendBookingCompletedEmails = async (booking) => {
          Amount: $${booking.totalAmount}.</p>`
     );
 }
+
+// moves finished rentals to completed and frees old unpaid holds
+export const updateBookingStatuses = async () => {
+    const today = new Date().toISOString().slice(0, 10);
+
+    const finished = await bookings.find({
+        paymentStatus: 'paid',
+        bookingStatus: 'confirmed',
+        endDate: { $lt: today },
+    }).toArray();
+
+    for (const booking of finished) {
+        await bookings.updateOne(
+            { _id: booking._id },
+            { $set: { bookingStatus: 'completed', completedAt: new Date() } }
+        );
+        await sendBookingCompletedEmails(booking);
+    }
+
+    const holdLimit = new Date(Date.now() - HOLD_MINUTES * 60 * 1000);
+    const expired = await bookings.updateMany(
+        { paymentStatus: 'unpaid', bookingStatus: 'pending', createdAt: { $lt: holdLimit } },
+        { $set: { bookingStatus: 'cancelled' } }
+    );
+
+    return { completed: finished.length, cancelled: expired.modifiedCount };
+}
+
+// node-cron works on a normal server. vercel is serverless so it uses the route below
+if (!process.env.VERCEL) {
+    cron.schedule('0 * * * *', async () => {
+        const result = await updateBookingStatuses();
+        console.log('cron done', result);
+    });
+}
+
+// vercel cron sends the CRON_SECRET as a bearer token
+app.get('/cron/update-bookings', async (req, res) => {
+    if (!process.env.CRON_SECRET || req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) {
+        return res.status(401).send({ message: 'Unauthorized' });
+    }
+    const result = await updateBookingStatuses();
+    res.send(result);
+})
 
 app.listen(port, () => {
     console.log(`JontroLagbe is running on port ${port}`)
