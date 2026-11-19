@@ -427,6 +427,110 @@ app.delete('/favorites/:equipmentId', verifyToken, verifyRenter, async (req, res
     res.send(result);
 })
 
+// bookings related apis
+const HOLD_MINUTES = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const isDateString = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value) && !isNaN(new Date(value));
+const countDays = (start, end) => Math.round((new Date(end) - new Date(start)) / DAY_MS) + 1;
+
+// daily = per day, weekly = per started week, monthly = per started 30 days
+const calculateAmount = (price, rentalType, days, quantity) => {
+    let units = days;
+    if (rentalType === 'Weekly') units = Math.ceil(days / 7);
+    if (rentalType === 'Monthly') units = Math.ceil(days / 30);
+    return price * units * quantity;
+}
+
+// how many items are already taken in this date range
+const getBookedQuantity = async (equipmentId, start, end) => {
+    const holdLimit = new Date(Date.now() - HOLD_MINUTES * 60 * 1000);
+    const result = await bookings.aggregate([
+        {
+            $match: {
+                equipmentId,
+                startDate: { $lte: end },
+                endDate: { $gte: start },
+                $or: [
+                    { paymentStatus: 'paid', bookingStatus: 'confirmed' },
+                    // unpaid bookings hold stock only for a short time
+                    { paymentStatus: 'unpaid', bookingStatus: 'pending', createdAt: { $gte: holdLimit } },
+                ],
+            }
+        },
+        { $group: { _id: null, total: { $sum: '$quantity' } } },
+    ]).toArray();
+    return result[0]?.total || 0;
+}
+
+app.post('/bookings', verifyToken, verifyRenter, async (req, res) => {
+    const { equipmentId, startDate, endDate, contactNumber, deliveryAddress, notes } = req.body;
+    const quantity = Number(req.body.quantity);
+    const id = toObjectId(equipmentId);
+    const today = new Date().toISOString().slice(0, 10);
+
+    if (!id) {
+        return res.status(400).send({ message: 'Invalid equipment id' });
+    }
+    if (!isDateString(startDate) || !isDateString(endDate)) {
+        return res.status(400).send({ message: 'Please select valid dates' });
+    }
+    if (startDate < today) {
+        return res.status(400).send({ message: 'Start date cannot be in the past' });
+    }
+    if (endDate < startDate) {
+        return res.status(400).send({ message: 'End date must be after start date' });
+    }
+    if (!Number.isInteger(quantity) || quantity < 1) {
+        return res.status(400).send({ message: 'Quantity must be at least 1' });
+    }
+    if (!str(contactNumber) || !str(deliveryAddress)) {
+        return res.status(400).send({ message: 'Contact number and delivery address are required' });
+    }
+
+    const item = await equipment.findOne({ _id: id, status: 'approved' });
+    if (!item) {
+        return res.status(404).send({ message: 'Equipment not found' });
+    }
+
+    // availability check for the selected dates
+    const booked = await getBookedQuantity(equipmentId, startDate, endDate);
+    const left = item.availableQuantity - booked;
+    if (quantity > left) {
+        return res.status(409).send({
+            message: left > 0 ? `Only ${left} item(s) available for these dates` : 'Not available for these dates',
+        });
+    }
+
+    const days = countDays(startDate, endDate);
+    const booking = {
+        equipmentId,
+        equipmentName: item.name,
+        equipmentImage: item.image,
+        rentalType: item.rentalType,
+        unitPrice: item.rentalPrice,
+        ownerId: item.ownerId,
+        ownerName: item.ownerName,
+        ownerEmail: item.ownerEmail,
+        customerId: req.user._id.toString(),
+        customerName: req.user.name,
+        customerEmail: req.user.email,
+        startDate,
+        endDate,
+        days,
+        quantity,
+        contactNumber: str(contactNumber),
+        deliveryAddress: str(deliveryAddress),
+        notes: str(notes),
+        totalAmount: calculateAmount(item.rentalPrice, item.rentalType, days, quantity),
+        paymentStatus: 'unpaid',
+        bookingStatus: 'pending',
+        createdAt: new Date(),
+    }
+    const result = await bookings.insertOne(booking);
+    res.send({ insertedId: result.insertedId, totalAmount: booking.totalAmount });
+})
+
 app.listen(port, () => {
     console.log(`JontroLagbe is running on port ${port}`)
 })
