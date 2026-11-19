@@ -100,6 +100,67 @@ const verifyOwnerOrAdmin = (req, res, next) => {
     next();
 }
 
+// users related apis
+const ROLES = ['customer', 'owner', 'admin'];
+
+app.get('/users', verifyToken, verifyAdmin, async (req, res) => {
+    const result = await users.find({}).sort({ createdAt: -1 }).toArray();
+    res.send(result);
+})
+
+app.get('/users/me', verifyToken, async (req, res) => {
+    res.send(req.user);
+})
+
+app.patch('/users/me', verifyToken, async (req, res) => {
+    const { name, image, phone, address } = req.body;
+    if (!name || !name.trim()) {
+        return res.status(400).send({ message: 'Name is required' });
+    }
+    const updatedDoc = {
+        $set: {
+            name: name.trim(),
+            image: image || '',
+            phone: phone || '',
+            address: address || '',
+            updatedAt: new Date(),
+        }
+    }
+    const result = await users.updateOne({ _id: req.user._id }, updatedDoc);
+    res.send(result);
+})
+
+app.patch('/users/:id/role', verifyToken, verifyAdmin, async (req, res) => {
+    const id = toObjectId(req.params.id);
+    const { role } = req.body;
+    if (!id || !ROLES.includes(role)) {
+        return res.status(400).send({ message: 'Invalid request' });
+    }
+    // admin should not remove own admin access by mistake
+    if (id.equals(req.user._id)) {
+        return res.status(403).send({ message: 'You cannot change your own role' });
+    }
+    const result = await users.updateOne({ _id: id }, { $set: { role } });
+    res.send(result);
+})
+
+app.patch('/users/:id/status', verifyToken, verifyAdmin, async (req, res) => {
+    const id = toObjectId(req.params.id);
+    const banned = req.body.banned === true;
+    if (!id) {
+        return res.status(400).send({ message: 'Invalid user id' });
+    }
+    if (id.equals(req.user._id)) {
+        return res.status(403).send({ message: 'You cannot block yourself' });
+    }
+    const result = await users.updateOne({ _id: id }, { $set: { banned } });
+    // blocked user is logged out everywhere
+    if (banned) {
+        await sessions.deleteMany({ userId: { $in: [req.params.id, id] } });
+    }
+    res.send(result);
+})
+
 app.get('/', (req, res) => {
     res.send('JontroLagbe is running')
 })
