@@ -1,4 +1,4 @@
-# GearHive Server
+# JontroLagbe Server
 
 Express and MongoDB server for JontroLagbe, an equipment rental marketplace.
 
