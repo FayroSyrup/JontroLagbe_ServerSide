@@ -699,6 +699,29 @@ app.get('/analytics/admin', verifyToken, verifyAdmin, async (req, res) => {
     });
 })
 
+app.get('/analytics/owner', verifyToken, verifyOwner, async (req, res) => {
+    const ownerId = req.user._id.toString();
+
+    const [totalEquipment, totalRentals, completedRentals, earningsResult, monthly] = await Promise.all([
+        equipment.countDocuments({ ownerId }),
+        bookings.countDocuments({ ownerId, paymentStatus: 'paid' }),
+        bookings.countDocuments({ ownerId, bookingStatus: 'completed' }),
+        payments.aggregate([
+            { $match: { ownerId } },
+            { $group: { _id: null, total: { $sum: '$amount' } } },
+        ]).toArray(),
+        getMonthlyPayments({ ownerId }),
+    ]);
+
+    res.send({
+        totalEquipment,
+        totalRentals,
+        completedRentals,
+        totalEarnings: earningsResult[0]?.total || 0,
+        monthlyEarnings: monthly.map((row) => ({ month: row.month, rentals: row.bookings, earnings: row.revenue })),
+    });
+})
+
 app.listen(port, () => {
     console.log(`JontroLagbe is running on port ${port}`)
 })
