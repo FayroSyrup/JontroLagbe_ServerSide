@@ -383,6 +383,50 @@ app.patch('/equipment/:id/status', verifyToken, verifyAdmin, async (req, res) =>
     res.send(result);
 })
 
+// favorites related apis
+app.post('/favorites', verifyToken, verifyRenter, async (req, res) => {
+    const equipmentId = toObjectId(req.body.equipmentId);
+    if (!equipmentId) {
+        return res.status(400).send({ message: 'Invalid equipment id' });
+    }
+    const item = await equipment.findOne({ _id: equipmentId, status: 'approved' });
+    if (!item) {
+        return res.status(404).send({ message: 'Equipment not found' });
+    }
+    // upsert so clicking twice does not make duplicates
+    const result = await favorites.updateOne(
+        { customerId: req.user._id.toString(), equipmentId },
+        { $setOnInsert: { createdAt: new Date() } },
+        { upsert: true }
+    );
+    res.send(result);
+})
+
+// only the ids, used to color the heart button
+app.get('/favorites/ids', verifyToken, verifyRenter, async (req, res) => {
+    const result = await favorites.find({ customerId: req.user._id.toString() }).toArray();
+    res.send(result.map((fav) => fav.equipmentId.toString()));
+})
+
+app.get('/favorites', verifyToken, verifyRenter, async (req, res) => {
+    const result = await favorites.aggregate([
+        { $match: { customerId: req.user._id.toString() } },
+        { $sort: { createdAt: -1 } },
+        { $lookup: { from: 'equipment', localField: 'equipmentId', foreignField: '_id', as: 'equipment' } },
+        { $unwind: '$equipment' },
+    ]).toArray();
+    res.send(result);
+})
+
+app.delete('/favorites/:equipmentId', verifyToken, verifyRenter, async (req, res) => {
+    const equipmentId = toObjectId(req.params.equipmentId);
+    if (!equipmentId) {
+        return res.status(400).send({ message: 'Invalid equipment id' });
+    }
+    const result = await favorites.deleteOne({ customerId: req.user._id.toString(), equipmentId });
+    res.send(result);
+})
+
 app.listen(port, () => {
     console.log(`JontroLagbe is running on port ${port}`)
 })
