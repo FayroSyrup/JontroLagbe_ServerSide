@@ -26,7 +26,7 @@ export async function connectToMongoDB() {
 }
 
 const connectedClient = await connectToMongoDB();
-const database = connectedClient.db("gearhivedb");
+const database = connectedClient.db("jontrolagbedb");
 // user and session are created by better auth on the client side
 const users = database.collection("user");
 const sessions = database.collection("session");
@@ -41,6 +41,10 @@ await favorites.createIndex({ customerId: 1, equipmentId: 1 }, { unique: true })
 
 // small helper, returns null if the id is not valid
 const toObjectId = (id) => (ObjectId.isValid(id) ? new ObjectId(id) : null);
+
+app.get('/', (req, res) => {
+    res.send('JontroLagbe is running')
+})
 
 // checks the bearer token against the session collection
 const verifyToken = async (req, res, next) => {
@@ -159,10 +163,6 @@ app.patch('/users/:id/status', verifyToken, verifyAdmin, async (req, res) => {
         await sessions.deleteMany({ userId: { $in: [req.params.id, id] } });
     }
     res.send(result);
-})
-
-app.get('/', (req, res) => {
-    res.send('JontroLagbe is running')
 })
 
 app.listen(port, () => {
