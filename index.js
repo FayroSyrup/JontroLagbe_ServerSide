@@ -5,6 +5,7 @@ import { MongoClient, ObjectId } from 'mongodb';
 import Stripe from 'stripe';
 import nodemailer from 'nodemailer';
 import cron from 'node-cron';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const app = express();
@@ -12,6 +13,8 @@ const port = process.env.PORT || 5000;
 
 // only my client sites can call this api
 const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:3000').split(',');
+// public keys of better auth, used to check the jwt signature
+const JWKS = createRemoteJWKSet(new URL(`${process.env.BETTER_AUTH_URL || 'http://localhost:3000'}/api/auth/jwks`));
 
 // middleware
 app.use(cors({ origin: allowedOrigins }));
@@ -50,33 +53,34 @@ app.get('/', (req, res) => {
     res.send('JontroLagbe is running')
 })
 
-// checks the bearer token against the session collection
+// checks the jwt from better auth with its public keys
 const verifyToken = async (req, res, next) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) {
-        return res.status(401).send({ message: 'Unauthorized' });
+    let token = req.headers.authorization;
+    if (token?.startsWith('Bearer ')) {
+        token = token.split(' ')[1];
     }
-    const token = authHeader.split(' ')[1];
     if (!token) {
         return res.status(401).send({ message: 'Unauthorized' });
     }
 
-    const session = await sessions.findOne({ token });
-    // expired sessions are not allowed
-    if (!session || new Date(session.expiresAt) < new Date()) {
-        return res.status(401).send({ message: 'Unauthorized' });
-    }
+    try {
+        // checks the signature and the expiry time
+        const { payload } = await jwtVerify(token, JWKS);
 
-    const user = await users.findOne({ _id: toObjectId(session.userId) });
-    if (!user) {
-        return res.status(401).send({ message: 'Unauthorized' });
-    }
-    if (user.banned) {
-        return res.status(403).send({ message: 'Your account is blocked' });
-    }
+        // always load the latest user from our database, because the role can change any time
+        const user = await users.findOne({ email: payload.email });
+        if (!user) {
+            return res.status(401).send({ message: 'Unauthorized' });
+        }
+        if (user.banned) {
+            return res.status(403).send({ message: 'Your account is blocked' });
+        }
 
-    req.user = user;
-    next();
+        req.user = user;
+        next();
+    } catch (error) {
+        return res.status(401).send({ message: 'Invalid or expired token' });
+    }
 }
 
 // must call these after verifyToken
