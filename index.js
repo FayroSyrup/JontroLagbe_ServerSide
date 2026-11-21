@@ -6,6 +6,9 @@ import Stripe from 'stripe';
 import nodemailer from 'nodemailer';
 import cron from 'node-cron';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
+import dns from "node:dns";
+
+dns.setServers(["8.8.8.8", "1.1.1.1"]);
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const app = express();
@@ -20,20 +23,27 @@ const JWKS = createRemoteJWKSet(new URL(`${process.env.BETTER_AUTH_URL || 'http:
 app.use(cors({ origin: allowedOrigins }));
 app.use(express.json());
 
-const client = new MongoClient(`mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@${process.env.DB_HOST}/`);
+const client = new MongoClient(
+    `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@${process.env.DB_HOST}/`
+);
 
 export async function connectToMongoDB() {
     try {
         await client.connect();
+
         console.log("You successfully connected to MongoDB!");
+
         return client;
     } catch (err) {
-        console.dir(err);
+        console.error("MongoDB connection failed:", err);
+        throw err;
     }
 }
 
 const connectedClient = await connectToMongoDB();
+
 const database = connectedClient.db("jontrolagbedb");
+
 // user and session are created by better auth on the client side
 const users = database.collection("user");
 const sessions = database.collection("session");
