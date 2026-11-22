@@ -13,7 +13,7 @@
 > **Frontend preview:** The image below is hosted by the client repository. Add the actual homepage screenshot at `docs/images/homepage.png` in the client repository and update the referenced path there when it is ready.
 
 <p align="center">
-  <img src=`https://raw.githubusercontent.com/FayroSyrup/JontroLagbe_ClientSide/main/docs/images/homepage.png` />
+  <img src="https://raw.githubusercontent.com/FayroSyrup/JontroLagbe_ClientSide/main/docs/images/homepage.png" />
 </p>
 
 ---
@@ -26,12 +26,12 @@ The backend is deployed separately from the frontend.
 
 ## Live deployments and repositories
 
-| Component | URL |
-|---|---|
-| **Public website (frontend)** | <https://jontrolagbe.vercel.app/> |
-| **Backend API** | <https://jontrolagbe-client.vercel.app/> |
-| **Server source code** | <https://github.com/FayroSyrup/JontroLagbe_ServerSide> |
-| **Client source code** | <https://github.com/FayroSyrup/JontroLagbe_ClientSide> |
+| Component                     | URL                                                    |
+| ----------------------------- | ------------------------------------------------------ |
+| **Public website (frontend)** | <https://jontrolagbe.vercel.app/>                      |
+| **Backend API**               | <https://jontrolagbe-client.vercel.app/>               |
+| **Server source code**        | <https://github.com/FayroSyrup/JontroLagbe_ServerSide> |
+| **Client source code**        | <https://github.com/FayroSyrup/JontroLagbe_ClientSide> |
 
 The API root returns `JontroLagbe is running` as a simple deployment health response. It is not the customer-facing website.
 
@@ -96,18 +96,18 @@ The API root returns `JontroLagbe is running` as a simple deployment health resp
 
 ## Technology stack
 
-| Area | Technology |
-|---|---|
-| Runtime | Node.js (ES modules) |
-| Framework | Express 5 |
-| Database | MongoDB Atlas, native MongoDB Node.js driver |
+| Area                        | Technology                                                 |
+| --------------------------- | ---------------------------------------------------------- |
+| Runtime                     | Node.js (ES modules)                                       |
+| Framework                   | Express 5                                                  |
+| Database                    | MongoDB Atlas, native MongoDB Node.js driver               |
 | Authentication verification | JOSE / Better Auth session and JWT public-key verification |
-| Payments | Stripe |
-| Scheduled tasks | node-cron and Vercel Cron endpoint |
-| Email | Nodemailer |
-| Cross-origin requests | CORS |
-| Configuration | dotenv |
-| Deployment | Vercel |
+| Payments                    | Stripe                                                     |
+| Scheduled tasks             | node-cron and Vercel Cron endpoint                         |
+| Email                       | Nodemailer                                                 |
+| Cross-origin requests       | CORS                                                       |
+| Configuration               | dotenv                                                     |
+| Deployment                  | Vercel                                                     |
 
 ## API workflow
 
@@ -198,26 +198,26 @@ npm start
 
 Available scripts:
 
-| Command | Purpose |
-|---|---|
-| `npm run dev` | Run with Node's watch mode for local development. |
-| `npm start` | Start the server with Node.js. |
-| `npm run seed` | Insert sample equipment when appropriate. |
+| Command        | Purpose                                           |
+| -------------- | ------------------------------------------------- |
+| `npm run dev`  | Run with Node's watch mode for local development. |
+| `npm start`    | Start the server with Node.js.                    |
+| `npm run seed` | Insert sample equipment when appropriate.         |
 
 ## Environment variables
 
-| Variable | Required | Description |
-|---|---|---|
-| `PORT` | No | HTTP port; defaults to `5000`. |
-| `DB_USER` | Yes | MongoDB Atlas database username. |
-| `DB_PASSWORD` | Yes | MongoDB Atlas database password. |
-| `DB_HOST` | Yes | Atlas cluster hostname, without the protocol. |
-| `STRIPE_SECRET_KEY` | For payments | Stripe secret key; use `sk_test_...` for testing. |
-| `CLIENT_URL` | Yes | Allowed frontend origin for CORS. |
-| `BETTER_AUTH_URL` | Yes | Frontend origin hosting the Better Auth JWKS endpoint. |
-| `EMAIL_USER` | Optional | Email account used by Nodemailer. |
-| `EMAIL_PASS` | Optional | Email app password used by Nodemailer. |
-| `CRON_SECRET` | For scheduled endpoint | Long random secret required by `/cron/update-bookings`. |
+| Variable            | Required               | Description                                             |
+| ------------------- | ---------------------- | ------------------------------------------------------- |
+| `PORT`              | No                     | HTTP port; defaults to `5000`.                          |
+| `DB_USER`           | Yes                    | MongoDB Atlas database username.                        |
+| `DB_PASSWORD`       | Yes                    | MongoDB Atlas database password.                        |
+| `DB_HOST`           | Yes                    | Atlas cluster hostname, without the protocol.           |
+| `STRIPE_SECRET_KEY` | For payments           | Stripe secret key; use `sk_test_...` for testing.       |
+| `CLIENT_URL`        | Yes                    | Allowed frontend origin for CORS.                       |
+| `BETTER_AUTH_URL`   | Yes                    | Frontend origin hosting the Better Auth JWKS endpoint.  |
+| `EMAIL_USER`        | Optional               | Email account used by Nodemailer.                       |
+| `EMAIL_PASS`        | Optional               | Email app password used by Nodemailer.                  |
+| `CRON_SECRET`       | For scheduled endpoint | Long random secret required by `/cron/update-bookings`. |
 
 ## Database
 
