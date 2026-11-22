@@ -23,6 +23,11 @@ const JWKS = createRemoteJWKSet(new URL(`${process.env.BETTER_AUTH_URL || 'http:
 app.use(cors({ origin: allowedOrigins }));
 app.use(express.json());
 
+// some home routers refuse the SRV lookup that mongodb+srv needs, so use public dns on my pc
+if (!process.env.VERCEL) {
+    dns.setServers(['8.8.8.8', '1.1.1.1']);
+}
+
 const client = new MongoClient(
     `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@${process.env.DB_HOST}/`
 );
@@ -30,12 +35,11 @@ const client = new MongoClient(
 export async function connectToMongoDB() {
     try {
         await client.connect();
-
         console.log("You successfully connected to MongoDB!");
-
         return client;
     } catch (err) {
-        console.error("MongoDB connection failed:", err);
+        // stop here, the routes cannot work without a database
+        console.log("MongoDB connection failed:", err.message);
         throw err;
     }
 }

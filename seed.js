@@ -1,6 +1,8 @@
 import 'dotenv/config';
 import { MongoClient } from 'mongodb';
+import dns from 'node:dns';
 
+dns.setServers(['8.8.8.8', '1.1.1.1']);
 const client = new MongoClient(`mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@${process.env.DB_HOST}/`);
 
 // name, category, price, rental type, quantity, location, brand, model, condition
