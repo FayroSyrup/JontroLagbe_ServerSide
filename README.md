@@ -10,12 +10,15 @@
 
 </div>
 
-> **Frontend preview:** The image below is hosted by the client repository. Add the actual homepage screenshot at `docs/images/homepage.png` in the client repository and update the referenced path there when it is ready.
+> **Frontend preview:** The image below is hosted by the client repository.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/FayroSyrup/JontroLagbe_ClientSide/main/docs/images/homepage.png" />
+  <img
+    src="https://raw.githubusercontent.com/FayroSyrup/JontroLagbe_ClientSide/main/docs/images/homepage.png"
+    alt="JontroLagbe Equipment Rental Platform Homepage"
+    width="100%"
+  />
 </p>
-
 ---
 
 ## Overview
