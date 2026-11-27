@@ -827,6 +827,27 @@ app.get('/cron/update-bookings', async (req, res) => {
     res.send(result);
 })
 
+// owner or admin marks a paid rental as completed after the equipment is returned
+app.patch('/bookings/:id/complete', verifyToken, verifyOwnerOrAdmin, async (req, res) => {
+    const id = toObjectId(req.params.id);
+    if (!id) {
+        return res.status(400).send({ message: 'Invalid booking id' });
+    }
+    const booking = await bookings.findOne({ _id: id });
+    if (!booking) {
+        return res.status(404).send({ message: 'Booking not found' });
+    }
+    if (req.user.role === 'owner' && booking.ownerId !== req.user._id.toString()) {
+        return res.status(403).send({ message: 'Forbidden' });
+    }
+    if (booking.paymentStatus !== 'paid' || booking.bookingStatus !== 'confirmed') {
+        return res.status(409).send({ message: 'Only paid and confirmed rentals can be completed' });
+    }
+    await bookings.updateOne({ _id: id }, { $set: { bookingStatus: 'completed', completedAt: new Date() } });
+    await sendBookingCompletedEmails(booking);
+    res.send({ success: true });
+})
+
 app.use((req, res) => {
     res.status(404).send({ message: 'Route not found' });
 })
